@@ -464,12 +464,12 @@ const IRR={
   posse:[["possum","potes","potest","possumus","potestis","possunt"],["poteram","poteras","poterat","poteramus","poteratis","poterant"],["potero","poteris","poterit","poterimus","poteritis","poterunt"]]};
 
 function nounForms(w){const D=DECL[w.d],st=D.stem(w);return D.e.map(row=>row.map(e=>e===null?w.nom:st+e))}
-function verbForms(v){const P=v.perf.slice(0,-1);let pres,impf,fut;
+function verbForms(v){const P=v.perf?v.perf.slice(0,-1):null;let pres,impf,fut;
   if(v.c==="irr"){[pres,impf,fut]=IRR[v.inf]}
   else{const S=v.inf.slice(0,-3);pres=PRES[v.c].map(e=>S+e);impf=PE.map(e=>S+IMPF[v.c]+e);fut=FUT[v.c].map(e=>S+e)}
-  return [pres,impf,fut,PERF.map(e=>P+e),PLQ.map(e=>P+e)]}
+  return P?[pres,impf,fut,PERF.map(e=>P+e),PLQ.map(e=>P+e)]:[pres,impf,fut]}
 const nounHead=w=>`${w.nom}, ${w.gen} ${w.g}.`;
-const verbHead=v=>`${v.inf}, ${verbForms(v)[0][0]}, ${v.perf}`;
+const verbHead=v=>`${v.inf}, ${verbForms(v)[0][0]}${v.perf?', '+v.perf:''}`;
 
 
 /* ================= Speicher ================= */
@@ -869,8 +869,36 @@ function restoreCode(){try{let c=$('rc').value.replace(/\s/g,'');const i=c.index
   o.board=S.board;S=o;save();load();applyTheme();SFX.win();confetti();toast('Fortschritt geladen',S.xp+' Punkte');go('learn')}
   catch(e){SFX.bad();fb('rfb','err',I('x')+'<span>Der Code ist ungültig. Wurde er komplett kopiert?</span>')}}
 
+
+/* ================= Grammatik mit den Lektionswörtern ================= */
+const plain=x=>x.normalize('NFD').replace(/[̄̆]/g,'').normalize('NFC');
+function deriveNoun(w){const raw=plain(w.la.replace(/\(.*?\)/g,'')).trim();if(/Pl\.|\//.test(raw))return null;const p=raw.split(',').map(x=>x.trim());if(p.length!==2)return null;
+  const m=p[1].match(/^([a-z]+)\s+(m|f|n)\.$/);if(!m||!/^[a-z]+$/.test(p[0]))return null;const nom=p[0],gen=m[1],g=m[2];
+  if(['domus','deus','vis','iter','fides','spes','plebs','ops','ius'].includes(nom))return null;let d=null;
+  if(gen.endsWith('ae')&&nom.endsWith('a'))d='a';
+  else if(gen.endsWith('i')&&!gen.endsWith('ei')){if(nom.endsWith('us')&&g!=='n')d='o';else if(nom.endsWith('um')&&g==='n')d='on';else if(/(er|ir)$/.test(nom)&&g==='m')d='or'}
+  else if(gen.endsWith('ei')&&nom.endsWith('es'))d='e';
+  else if(gen.endsWith('us')&&nom.endsWith('us')&&nom===gen)d='u';
+  else if(gen.endsWith('is')){const st=gen.slice(0,-2);if(/[^aeiou][^aeiou]$/.test(st)||/(is|es)$/.test(nom)&&nom.length>=gen.length||(g==='n'&&/(e|al|ar)$/.test(nom)))return null;d=g==='n'?'kn':'k'}
+  return d?{nom,gen,g,de:w.de,d,own:true}:null}
+function deriveVerb(w){const raw=plain(w.la.replace(/\(.*?\)/g,'')).trim();if(/\s/.test(raw.replace(/,\s*/g,',')))return null;const p=raw.split(',').map(x=>x.trim()).filter(Boolean);
+  if(p.length<2)return null;const [inf,pr,pf]=p;if(!/^[a-z]+$/.test(inf)||!/^[a-z]+$/.test(pr))return null;
+  if(/(sse|rre|lle)$/.test(inf)||/eo$/.test(pr)&&/ire$/.test(inf))return null;let c=null;
+  const orig=w.la.split(',')[0];if(/āre$/.test(orig))c='a';else if(/ēre$/.test(orig))c='e';else if(/īre$/.test(orig))c='i';else if(/ere$/.test(orig))c=/io$/.test(pr)?'m':'k';
+  if(!c)return null;if(c==='a'&&!pr.endsWith('o'))return null;if(c==='e'&&!pr.endsWith('eo'))return null;if(c==='i'&&!pr.endsWith('io'))return null;
+  return{inf,perf:pf&&/^[a-z]+i$/.test(pf)?pf:null,de:w.de,c,own:true}}
+function gNouns(f){const own=S.gramSrc==='all'?[]:deck().map(deriveNoun).filter(Boolean).filter(n=>!f||n.d===f);return own.length>=2?own:NOUNS.filter(n=>!f||n.d===f)}
+function gVerbs(f){const own=S.gramSrc==='all'?[]:deck().map(deriveVerb).filter(Boolean).filter(v=>!f||v.c===f);return own.length>=2?own:VERBS.filter(v=>!f||v.c===f)}
+const nT=v=>verbForms(v).length;
+function gramInfo(){const n=deck().map(deriveNoun).filter(Boolean).length,v=deck().map(deriveVerb).filter(Boolean).length;return{n,v}}
+
 /* ================= Tab: Grammatik ================= */
-function renderGrammar(){view(`${topbar()}<div class="ptitle">Grammatik</div><div class="psub">Grammatica</div>
+function renderGrammar(){const gi=gramInfo(),act=S.lessons.filter(l=>S.active.includes(l.id)),own=S.gramSrc!=='all',okN=gi.n>=2,okV=gi.v>=2;
+  view(`${topbar()}<div class="ptitle">Grammatik</div><div class="psub">Grammatica</div>
+  <div class="card"><div class="small" style="font-weight:600;margin-bottom:8px">Mit welchen Wörtern üben?</div>
+    <div class="seg" style="margin-bottom:10px"><button class="${own?'on':''}" onclick="S.gramSrc='lesson';save();renderGrammar()">Meine Lektion</button><button class="${own?'':'on'}" onclick="S.gramSrc='all';save();renderGrammar()">Grundwörter</button></div>
+    <div class="small">${own?(act.length?esc(act.map(l=>l.name).join(', '))+': '+gi.n+' Nomen und '+gi.v+' Verben für Grammatik.'+(!okN||!okV?' Wo es zu wenige gibt, nehme ich Grundwörter dazu.':''):'Wähle auf der Startseite eine Lektion.'):'Feste Übungswörter wie servus, puella, vocare.'}</div>
+    <button class="btn sm sec" style="margin-top:10px" onclick="renderMulti()">Lektionen wählen</button></div>
   <div class="label">Aufgaben</div><div class="list">
     ${item('search','Formen bestimmen','<i>Quae forma est?</i> · Fall, Zahl, Person, Zeit erkennen','startForms()')}
     ${item('pen','Form bilden','<i>Forma facienda</i> · z. B. servus → Genitiv Plural','startBuild()')}
@@ -902,11 +930,11 @@ const P=(w,h,t)=>`<div class="w lat">${w}</div>${h?`<div class="h">${h}</div>`:'
 const nLabel=(c,n)=>CASES[c]+' '+(n?'Plural':'Singular'),vLabel=(t,p)=>PERS[p]+' '+TENSES[t];
 
 /* Formen bestimmen */
-function mkForms(){if(Math.random()<.5){const w=pick(NOUNS),F=nounForms(w),all=[];F.forEach((r,n)=>r.forEach((f,c)=>all.push({f,l:nLabel(c,n)})));
+function mkForms(){if(Math.random()<.5){const w=pick(gNouns()),F=nounForms(w),all=[];F.forEach((r,n)=>r.forEach((f,c)=>all.push({f,l:nLabel(c,n)})));
     const t=pick(all),set=all.filter(x=>x.f===t.f).map(x=>x.l),wrong=shuffle([...new Set(all.map(x=>x.l))].filter(l=>!set.includes(l))).slice(0,3);
     return{prompt:P(esc(t.f),esc(nounHead(w))+' – '+esc(w.de)),opts:shuffle([{label:t.l,ok:true},...wrong.map(l=>({label:l,ok:false}))]),
       explain:'<b>'+esc(t.f)+'</b> = '+set.join(' oder '),miss:[t.f,set.join(' / ')]}}
-  const v=pick(VERBS),F=verbForms(v),all=[];F.forEach((r,t)=>r.forEach((f,p)=>all.push({f,l:vLabel(t,p)})));
+  const v=pick(gVerbs()),F=verbForms(v),all=[];F.forEach((r,t)=>r.forEach((f,p)=>all.push({f,l:vLabel(t,p)})));
   const t=pick(all),set=all.filter(x=>x.f===t.f).map(x=>x.l);const [pp,tt]=[t.l.slice(0,6),t.l.slice(7)];
   let near=all.filter(x=>!set.includes(x.l)&&(x.l.startsWith(pp)||x.l.endsWith(tt))).map(x=>x.l);if(near.length<3)near=all.filter(x=>!set.includes(x.l)).map(x=>x.l);
   const wrong=shuffle([...new Set(near)]).slice(0,3);
@@ -914,21 +942,21 @@ function mkForms(){if(Math.random()<.5){const w=pick(NOUNS),F=nounForms(w),all=[
 function startForms(){runGram('forms',mkForms,'Formen bestimmen','forms')}
 
 /* Form bilden */
-function mkBuild(){if(Math.random()<.5){const w=pick(NOUNS),F=nounForms(w),c=Math.floor(Math.random()*5),n=Math.floor(Math.random()*2);if(c===0&&n===0)return mkBuild();const a=F[n][c];
+function mkBuild(){if(Math.random()<.5){const w=pick(gNouns()),F=nounForms(w),c=Math.floor(Math.random()*5),n=Math.floor(Math.random()*2);if(c===0&&n===0)return mkBuild();const a=F[n][c];
     return{prompt:P(esc(nounHead(w)),esc(w.de),nLabel(c,n)),answers:[a],ph:'Lateinische Form',explain:'<b>'+esc(a)+'</b>',miss:[nounHead(w)+' → '+nLabel(c,n),a]}}
-  const v=pick(VERBS),F=verbForms(v),t=Math.floor(Math.random()*5),p=Math.floor(Math.random()*6),a=F[t][p];
+  const v=pick(gVerbs()),F=verbForms(v),t=Math.floor(Math.random()*F.length),p=Math.floor(Math.random()*6),a=F[t][p];
   return{prompt:P(esc(verbHead(v)),esc(v.de),vLabel(t,p)),answers:[a],ph:'Lateinische Form',explain:'<b>'+esc(a)+'</b>',miss:[v.inf+' → '+vLabel(t,p),a]}}
 function startBuild(){runGram('build',mkBuild,'Form bilden','gram')}
 
 /* Umwandeln */
-function mkChange(){if(Math.random()<.45){for(let k=0;k<20;k++){const w=pick(NOUNS),F=nounForms(w),c=Math.floor(Math.random()*5),n=Math.floor(Math.random()*2),src=F[n][c];
+function mkChange(){if(Math.random()<.45){for(let k=0;k<20;k++){const w=pick(gNouns()),F=nounForms(w),c=Math.floor(Math.random()*5),n=Math.floor(Math.random()*2),src=F[n][c];
       const an=[];F.forEach((r,n2)=>r.forEach((f,c2)=>{if(f===src)an.push([n2,c2])}));if(new Set(an.map(x=>x[0])).size>1)continue;
       const tg=[...new Set(an.map(([n2,c2])=>F[1-n2][c2]))];const lbl=n?'in den Singular':'in den Plural';
       return{prompt:P(esc(src),esc(nounHead(w))+' – '+esc(w.de),lbl),answers:tg,ph:'Umgewandelte Form',explain:'<b>'+esc(tg.join(' / '))+'</b>',miss:[src+' → '+lbl,tg.join(' / ')]}}}
-  const v=pick(VERBS),F=verbForms(v),t=Math.floor(Math.random()*5),p=Math.floor(Math.random()*6),src=F[t][p];
+  const v=pick(gVerbs()),F=verbForms(v),t=Math.floor(Math.random()*F.length),p=Math.floor(Math.random()*6),src=F[t][p];
   const an=[];F.forEach((r,t2)=>r.forEach((f,p2)=>{if(f===src)an.push([t2,p2])}));let tg,lbl;
   if(Math.random()<.5){lbl=p<3?'in den Plural':'in den Singular';tg=an.map(([t2,p2])=>F[t2][(p2+3)%6])}
-  else{let nt;do{nt=Math.floor(Math.random()*5)}while(nt===t);lbl='ins '+TENSES[nt];tg=an.map(([t2,p2])=>F[nt][p2])}
+  else if(F.length>1){let nt;do{nt=Math.floor(Math.random()*F.length)}while(nt===t);lbl='ins '+TENSES[nt];tg=an.map(([t2,p2])=>F[nt][p2])}
   tg=[...new Set(tg)];return{prompt:P(esc(src),esc(verbHead(v))+' – '+esc(v.de),lbl),answers:tg,ph:'Umgewandelte Form',explain:'<b>'+esc(tg.join(' / '))+'</b>',miss:[src+' → '+lbl,tg.join(' / ')]}}
 function startChange(){runGram('change',mkChange,'Umwandeln','gram')}
 
@@ -951,14 +979,14 @@ function tableFrame(sel,body){view(`<div class="game-top"><button class="x" oncl
   <div class="card"><div class="whead" id="th"></div><div class="scroll"><table class="gt" id="tt"></table></div><div class="fb" id="tfb2"></div>
   <div class="row"><button class="btn sec" style="flex:1" onclick="${body}()">${I('refresh')}Neu</button><button class="btn" style="flex:1" id="tbtn2" onclick="checkTable()">Prüfen</button></div></div>`,false)}
 function openDecl(){tableFrame(`<select id="dsel" onchange="newDecl()"><option value="">Alle Deklinationen</option>${Object.entries(DECL).map(([k,v])=>`<option value="${k}">${v.n}</option>`).join('')}</select>`,'newDecl');newDecl()}
-function newDecl(){tKind='d';tChecked=false;const f=$('dsel').value,pool=NOUNS.filter(n=>!f||n.d===f);let w;do{w=pick(pool)}while(pool.length>1&&w===tW);tW=w;
+function newDecl(){tKind='d';tChecked=false;const f=$('dsel').value,pool=gNouns(f);let w;do{w=pick(pool)}while(pool.length>1&&w===tW);tW=w;
   $('th').innerHTML=`<div class="w">${esc(nounHead(w))}</div><div class="m">${esc(w.de)} · ${DECL[w.d].n}</div>`;
   $('tt').innerHTML='<tr><th></th><th>Singular</th><th>Plural</th></tr>'+CASES.map((c,ci)=>`<tr><td>${c}</td>${[0,1].map(n=>`<td><input type="text" data-n="${n}" data-c="${ci}" autocomplete="off" autocapitalize="off" spellcheck="false" ${!n&&!ci?`value="${w.nom}" readonly`:''}></td>`).join('')}</tr>`).join('');
   prepTable()}
 function openConj(){tableFrame(`<select id="csel" onchange="newConj()"><option value="">Alle Konjugationen</option>${Object.entries(CONJ).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
   <select id="zsel" onchange="newConj()"><option value="">Alle Zeiten</option>${TENSES.map((t,i)=>`<option value="${i}">${t}</option>`).join('')}</select>`,'newConj');newConj()}
-function newConj(){tKind='c';tChecked=false;const f=$('csel').value,z=$('zsel').value,pool=VERBS.filter(v=>!f||v.c===f);let v;do{v=pick(pool)}while(pool.length>1&&v===tW);tW=v;
-  tT=z===''?Math.floor(Math.random()*5):+z;
+function newConj(){tKind='c';tChecked=false;const f=$('csel').value,z=$('zsel').value,pool=gVerbs(f);let v;do{v=pick(pool)}while(pool.length>1&&v===tW);tW=v;
+  tT=z===''?Math.floor(Math.random()*nT(v)):Math.min(+z,nT(v)-1);
   $('th').innerHTML=`<div class="w">${esc(verbHead(v))}</div><div class="m">${esc(v.de)} · ${v.c==='irr'?'unregelmäßig':CONJ[v.c]}</div><div class="prompt" style="margin:8px 0 0"><span class="t" style="margin:0">${TENSES[tT]}</span></div>`;
   $('tt').innerHTML='<tr><th></th><th>Form</th></tr>'+PERS.map((p,i)=>`<tr><td>${p}<div class="small" style="font-size:12px">${PRON[i]}</div></td><td><input type="text" data-p="${i}" autocomplete="off" autocapitalize="off" spellcheck="false"></td></tr>`).join('');
   prepTable()}
