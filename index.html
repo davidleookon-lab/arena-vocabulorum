@@ -568,7 +568,7 @@ function lessonPicker(){const own=S.lessons.map(l=>`<option value="${l.id}" ${S.
 function libLesson(bi,li){const b=LIB.books[bi],l=b.lessons[li],key=b.name+'|'+l.name;return S.lessons.find(x=>x.src===key||(S.added.includes(key)&&x.name===l.name))}
 function libAdd(bi,li){const ex=libLesson(bi,li);if(ex)return ex.id;const b=LIB.books[bi],l=b.lessons[li],key=b.name+'|'+l.name,id='l'+Date.now();
   S.lessons.push({id,name:l.name,src:key,words:l.words.map(w=>({la:w[0],de:w[1]}))});if(!S.added.includes(key))S.added.push(key);save();checkAch();return id}
-function pickLesson(v){SFX.tap();let id=v;if(v.startsWith('lib:')){const [,bi,li]=v.split(':');id=libAdd(+bi,+li);toast('Lektion hinzugefügt')}S.active=[id];save();renderLearn()}
+function pickLesson(v){SFX.tap();let id=v;if(v.startsWith('lib:')){const [,bi,li]=v.split(':');id=libAdd(+bi,+li)}openLearn([id],'learn')}
 async function ensureLib(){if(!LIB){LIB=LIB_INLINE;try{const r=await fetch('lessons.json',{cache:'no-store'});const j=await r.json();if(j&&j.books&&j.books.length){LIB=j;if(tab==='learn'&&!mode)renderLearn()}}catch(e){}}}
 function renderLearn(){ensureLib();if(!S.lessons.length){view(`${topbar()}<div class="ptitle">Salve!</div><div class="psub">Quid hodie discimus?</div>${lessonPicker()}<div class="small" style="margin:0 4px">Wähle oben eine Lektion aus. Danach kannst du sofort lernen.</div>`);return}const {due,nw}=dueInfo(),dx=S.hist[iso()]||0,act=S.lessons.filter(l=>S.active.includes(l.id));
   const todo=due.length+Math.min(nw.length,10);const dToday=S.daily[iso()];
@@ -603,7 +603,7 @@ let missed=[],sx=0,shareText='',again=null;
 function needDeck(){if(deck().length<4){toast(S.lessons.length?'Mindestens 4 Vokabeln nötig':'Noch keine Lektion','Füge eine Lektion hinzu');go('lessons');return false}return true}
 function gameFrame(inner,cnt=''){view(`<div class="game-top"><button class="x" onclick="quit()" title="Beenden">${I('x')}</button><div class="bar"><div id="gbar" style="width:0"></div></div><div class="cnt" id="gcnt">${cnt}</div></div>${inner}`,false)}
 function setProg(i,n,txt){$('gbar').style.width=(i/n*100)+'%';$('gcnt').textContent=txt??(i+'/'+n)}
-function quit(){clearInterval(qInt);clearInterval(bInt);mode=null;go(tab)}
+function quit(){clearInterval(qInt);clearInterval(bInt);mode=null;fromLesson?openLearn():go(tab)}
 function options(cur,r=Math.random){const wrong=shuffle(deck().filter(v=>v!==cur&&v.de!==cur.de),r).slice(0,3);return shuffle([cur,...wrong],r)}
 function weighted(){const d=deck();let tot=0;const w=d.map(v=>{const x=6-(S.box[v.la]||0);tot+=x;return x});let r=Math.random()*tot;for(let i=0;i<d.length;i++){r-=w[i];if(r<=0)return d[i]}return d[d.length-1]}
 function answers(id,opts,onPick){const box=$(id);box.innerHTML='';delete box.dataset.lock;opts.forEach((o,i)=>{const b=document.createElement('button');b.className='ans';b.innerHTML=`<span class="k">${i+1}</span><span>${esc(o.label)}</span>`;b.dataset.ok=o.ok?1:0;
@@ -615,7 +615,7 @@ function result({big,title,sub='',xp=0,squares=null,share=false,again:a}){addXp(
     <div class="xpgain">+${xp} XP</div>
     ${share?`<div style="margin-bottom:10px"><button class="btn full" onclick="copyText(shareText,this)">${I('copy')}Ergebnis für den Klassenchat kopieren</button></div>`:''}
     ${missed.length?`<div class="label" style="text-align:left">Noch üben</div><div class="card missed" style="padding:4px 16px">${missed.map(m=>`<div><span>${esc(m.a)}</span><span class="muted">${esc(m.b)}</span></div>`).join('')}</div>`:''}
-    <div class="row" style="margin-top:16px"><button class="btn sec" style="flex:1" onclick="fromLesson&&tab==='lessons'?openLesson(fromLesson):go(tab)">Fertig</button><button class="btn" style="flex:1" onclick="again()">Nochmal</button></div></div>`,false)}
+    <div class="row" style="margin-top:16px"><button class="btn sec" style="flex:1" onclick="fromLesson?openLearn():go(tab)">Fertig</button><button class="btn" style="flex:1" onclick="again()">Nochmal</button></div></div>`,false)}
 
 /* ================= Karteikarten ================= */
 let cq=[],cur=null,cDone=0,cTot=0,cFirst={},cBusy=false;
@@ -849,8 +849,7 @@ function renderMulti(){if(!multiSel)multiSel=new Set(S.active);
   ${Object.entries(groups).map(([g,ps])=>`<div class="label">${esc(g)}</div><div class="list">${ps.map(p=>box(p.key,p.part,p.n+' Vokabeln')).join('')}</div>`).join('')}
   <div style="position:sticky;bottom:12px;margin-top:16px"><button class="btn full" id="multiBtn" onclick="saveMulti()"></button></div>`,false);updMulti()}
 function updMulti(){const b=$('multiBtn');if(!b)return;const n=multiSel.size;b.disabled=!n;b.textContent=n?'Fertig ('+n+' ausgewählt)':'Mindestens eine Lektion wählen'}
-function saveMulti(){if(!multiSel||!multiSel.size)return;S.active=[...multiSel].map(k=>{if(k.startsWith('lib:')){const [,bi,li]=k.split(':');return libAdd(+bi,+li)}return k});
-  multiSel=null;save();SFX.win();toast(deck().length+' Vokabeln ausgewählt',S.active.length+' Lektionen');go('learn')}
+function saveMulti(){if(!multiSel||!multiSel.size)return;const ids=[...multiSel].map(k=>{if(k.startsWith('lib:')){const [,bi,li]=k.split(':');return libAdd(+bi,+li)}return k});multiSel=null;SFX.win();openLearn(ids,tab==='lessons'?'lessons':'learn')}
 
 
 /* ================= Fortschritt sichern ================= */
@@ -1033,6 +1032,26 @@ async function loadLib(){if(!LIB)await ensureLib();
     return `<div class="list"><div style="padding:14px 16px 4px"><b style="font-family:Cinzel,serif">${esc(b.name)}</b>${b.info?`<div class="small">${esc(b.info)}</div>`:''}</div>
     ${Object.entries(groups).map(([g,ps])=>`<div class="lesson" style="flex-wrap:wrap"><div class="tx" style="min-width:120px"><b>${esc(g)}</b><div class="small">${ps.map(p=>p.n).pop()} Vokabeln</div></div>
       <div class="row" style="gap:6px">${ps.map(p=>`<button class="btn sm ${libLesson(bi,p.li)?'':'sec'}" onclick="openLesson(libAdd(${bi},${p.li}))">${esc(p.part.replace(' Seite','').replace('Ganze Lektion','Ganz'))}</button>`).join('')}</div></div>`).join('')}</div>`}).join('')}
+/* ================= Lernseite einer Auswahl ================= */
+function openLearn(ids,fromTab){if(ids)S.active=ids;save();fromLesson='sel';if(fromTab)tab=fromTab;mode=null;
+  const act=S.lessons.filter(l=>S.active.includes(l.id)),d=deck(),m=d.length?Math.round(d.reduce((s,w)=>s+(S.box[w.la]||0),0)/(d.length*5)*100):0,{due,nw}=dueInfo(),todo=due.length+Math.min(nw.length,10);
+  const title=act.length===1?act[0].name:act.length+' Lektionen gemischt';
+  view(`<div class="game-top"><button class="x" onclick="go(tab)">${I('back')}</button><b style="flex:1">${esc(title)}</b><button class="btn sm sec" onclick="renderMulti()">Ändern</button></div>
+  ${act.length>1?`<div class="small" style="margin:-12px 2px 12px">${esc(act.map(l=>l.name).join(', '))}</div>`:''}
+  <div class="card"><div class="row between small"><span>${d.length} Vokabeln</span><span>${m} % gelernt</span></div><div class="bar good" style="margin:8px 0 14px"><div style="width:${m}%"></div></div>
+    <button class="btn full" onclick="startReview()" ${todo?'':'disabled'}>${todo?'Jetzt '+todo+' Karten lernen':'Alles wiederholt'}</button></div>
+  <div class="label">Lernen</div><div class="list">
+    ${item('cards','Karteikarten','umdrehen und selbst einschätzen','startCards()')}
+    ${item('check','Multiple Choice','aus vier Antworten wählen','startMC()')}
+    ${item('pen','Tipp-Duell','die Bedeutung selbst schreiben','startType()')}
+    ${item('list','Stammformen','Perfekt, PPP und Genitiv eintippen','startStamm()')}</div>
+  <div class="label">Testen</div><div class="list">
+    ${item('trophy','Vokabeltest','20 Fragen wie in der Schule, mit Note','startTest()')}
+    ${item('bolt','Blitz-Quiz','60 Sekunden gegen die Uhr','startQuiz()')}
+    ${item('sword','Arena','Kampf gegen Monster','startBoss()')}
+    ${item('columns','Grammatik','mit den Wörtern dieser Auswahl',"S.gramSrc='lesson';save();go('grammar')")}</div>
+  <div class="label">Alle Vokabeln</div><div class="card" style="padding:4px 16px">${d.map(w=>`<div class="wrow"><span class="lat">${esc(w.la)}</span><span class="muted">${esc(w.de)}</span></div>`).join('')}</div>`,tab!=='lessons'||true)}
+function openLesson(id){if(!S.lessons.some(l=>l.id===id))return;openLearn([id],'lessons')}
 function addLib(bi,li){const b=LIB.books[bi],l=b.lessons[li],key=b.name+'|'+l.name,id='l'+Date.now();
   S.lessons.push({id,name:l.name,words:l.words.map(w=>({la:w[0],de:w[1]}))});S.added.push(key);S.active=[id];save();SFX.win();toast(l.name+' hinzugefügt','Wird jetzt geübt');checkAch();renderLessons()}
 function toggleL(id){SFX.tap();if(S.active.includes(id)){if(S.active.length>1)S.active=S.active.filter(x=>x!==id);else{toast('Mindestens eine Lektion muss aktiv sein');return}}else S.active.push(id);save();renderLessons()}
