@@ -690,8 +690,7 @@ function dashCard(){const t=totals(),seen=Object.keys(S.box).length,sure=statVal
   return `<div class="label">Dein Fortschritt</div><div class="stats">
     <div class="stat"><b>${seen}</b><span>Wörter geübt</span></div><div class="stat"><b>${sure}</b><span>Wörter sicher</span></div>
     <div class="stat"><b style="color:var(--good)">${t.r}</b><span>richtig</span></div><div class="stat"><b style="color:var(--bad)">${t.w}</b><span>falsch</span></div></div>
-  <div class="card"><div class="row between small"><span>Aktuelle Auswahl gelernt</span><span>${m} %</span></div><div class="bar good" style="margin-top:8px"><div style="width:${m}%"></div></div>
-    <div class="row between small" style="margin-top:14px"><span>Trefferquote</span><span>${t.p===null?'zählt ab deiner nächsten Antwort':t.p+' %'}</span></div>${t.p===null?'':`<div class="bar" style="margin-top:8px"><div style="width:${t.p}%"></div></div>`}</div>`}
+  <div class="card"><div class="row between small"><span>Trefferquote</span><span>${t.p===null?'zählt ab deiner nächsten Antwort':t.p+' %'}</span></div>${t.p===null?'':`<div class="bar" style="margin-top:8px"><div style="width:${t.p}%"></div></div>`}</div>`}
 function nextStep(){const {due,nw}=dueInfo(),hw=hardWords(),up=upcoming().filter(t=>daysTo(t.date)<=3)[0],nl=nextPathLesson();
   if(up)return{i:'trophy',t:'Test '+whenTxt(daysTo(up.date))+': '+esc(up.title),s:'Mach einen Probetest mit Note','on':'startTest()'};
   if(due.length)return{i:'refresh',t:due.length+' Wörter sind fällig',s:'Jetzt wiederholen, bevor du sie vergisst','on':'startReview()'};
@@ -716,32 +715,20 @@ function renderLearn(){ensureLib();if(!S.lessons.length){view(`${topbar()}<div c
   view(`${topbar()}<div class="ptitle">Salve${S.uname?', '+esc(S.uname):''}!</div><div class="psub">Quid hodie discimus?</div>
   ${testCard()}
   ${lessonPicker()}
-  <div class="card"><div class="today">
+  ${(()=>{const d=deck(),m=lessonPct(d),title=act.length===1?act[0].name:act.length+' Lektionen gemischt';return `<div class="card"><div class="today">
     <div class="ring"><svg width="84" height="84"><circle cx="42" cy="42" r="36" stroke="var(--soft)" stroke-width="7" fill="none"/>
       <circle cx="42" cy="42" r="36" stroke="var(--accent)" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="226.2" stroke-dashoffset="${226.2*(1-Math.min(dx,50)/50)}" style="transition:stroke-dashoffset 1s"/></svg>
       <div class="in"><b>${Math.min(dx,50)}</b><span>/ 50 XP</span></div></div>
-    <div class="tx"><h3>${todo?'Wiederholen':'Alles wiederholt'}</h3>
-      <div class="small">${due.length} fällig · ${nw.length} neu</div>
-</div></div>
-    <button class="btn full" style="margin-top:16px" onclick="startReview()" ${todo?'':'disabled'}>${todo?'Jetzt '+todo+' Karten lernen':'Morgen geht es weiter'}</button></div>
-  ${dashCard()}
+    <div class="tx"><h3>${esc(title)}</h3><div class="small">${d.length} Vokabeln · ${m} % gelernt</div><div class="bar good" style="margin-top:8px"><div style="width:${m}%"></div></div></div></div>
+    <button class="btn full" style="margin-top:16px" onclick="startCards()">Alle ${d.length} Vokabeln lernen</button>
+    <div class="row" style="margin-top:10px">${due.length?`<button class="btn sm sec" style="flex:1" onclick="startReview()">Nur fällige (${due.length})</button>`:''}<button class="btn sm sec" style="flex:1" onclick="openLearn()">Übungen & Wortliste</button></div></div>`})()}
   <div class="label">Nächster Schritt</div><div class="list">${(st=>item(st.i,st.t,st.s,st.on))(nextStep())}</div>
-  ${recentList()}
-  <div class="label">Tägliche Prüfung</div>
-  <div class="list">${item('calendar','Examen cottidianum','15 Fragen, für alle mit derselben Lektion gleich','startDaily()',dToday?`<span class="small" style="color:var(--good);font-weight:600">${dToday}</span>`:'')}</div>
-  <div class="label">Vor dem Test</div>
-  <div class="list">${item('trophy','Vokabeltest','<i>Probatio</i> · 20 Fragen wie in der Schule, mit Note','startTest()')}
+  <div class="label">Prüfen</div>
+  <div class="list">${item('calendar','Tägliche Prüfung','<i>Examen cottidianum</i> · 15 Fragen, einmal am Tag','startDaily()',dToday?`<span class="small" style="color:var(--good);font-weight:600">${dToday}</span>`:'')}
+    ${item('trophy','Vokabeltest','<i>Probatio</i> · 20 Fragen wie in der Schule, mit Note','startTest()')}
     ${item('calendar','Meine Tests','<i>Dies probationis</i> · Testtermine eintragen und planen','renderTests()',(upcoming().length?`<span class="small" style="font-weight:600;color:var(--accent)">${upcoming().length}</span>`:''))}</div>
-  <div class="row between" style="margin:26px 2px 10px;flex-wrap:wrap;gap:8px"><div class="label" style="margin:0">Üben</div>${dirSeg('renderLearn()')}</div>
-  <div class="list">
-    ${item('flame','Schwierige Wörter','<i>Difficilia</i> · '+(hardWords().length?hardWords().length+' Wörter, die du oft falsch hattest':'noch keine – sie sammeln sich beim Üben'),'startHard()')}
-    ${item('cards','Karteikarten','<i>Chartulae</i> · alle Vokabeln der Lektion','startCards()')}
-    ${item('check','Multiple Choice','<i>Elige</i> · aus vier Antworten wählen','startMC()')}
-    ${item('list','Stammformen','<i>Formae</i> · Perfekt, PPP und Genitiv eintippen','startStamm()')}
-    ${item('bolt','Blitz-Quiz','<i>Fulmen Iovis</i> · 60 Sekunden, Rekord '+S.best,'startQuiz()')}
-    ${item('pen','Tipp-Duell','<i>Scribe, si potes</i> · Übersetzung selbst schreiben','startType()')}
-    ${item('sword','Arena','<i>Pugna cum monstris</i> · Kampf gegen Monster','startBoss()')}
-  </div>`)}
+  ${dashCard()}
+  ${recentList()}`)}
 
 /* ================= Gemeinsame Spiel-Bausteine ================= */
 let missed=[],sx=0,shareText='',again=null,hardRun=false;
@@ -767,9 +754,9 @@ function result({big,title,sub='',xp=0,squares=null,share=false,again:a}){logRun
 
 /* ================= Karteikarten ================= */
 let cDir='ld',tDir='ld',runArgs=[],cq=[],cur=null,cDone=0,cTot=0,cFirst={},cBusy=false;
-function startReview(){const {due,nw}=dueInfo();startCards(due.concat(nw.slice(0,10)).slice(0,25))}
+function startReview(){const {due,nw}=dueInfo();startCards(due.concat(nw))}
 function startCards(list,hard){if(!needDeck())return;mode='cards';hardRun=!!hard;missed=[];cFirst={};sx=0;
-  cq=list||shuffle(deck()).sort((a,b)=>(S.box[a.la]||0)-(S.box[b.la]||0)).slice(0,25);cTot=cq.length;cDone=0;
+  cq=list||shuffle(deck()).sort((a,b)=>(S.box[a.la]||0)-(S.box[b.la]||0));cTot=cq.length;cDone=0;
   gameFrame(`<div class="flip" id="flip"><div class="flip-in"><div class="face"><div class="boxes" id="cBoxes"></div><button class="speak" id="spk" title="Vorlesen">${I('speaker')}</button>
     <div class="w lat" id="cF"></div><div class="meta">Tippen zum Umdrehen</div></div><div class="face b"><div class="w" id="cB"></div><div class="meta">Gewusst? Wische oder tippe unten</div></div></div></div>
     <div class="row"><button class="btn sec" style="flex:1" onclick="rate(false)">${I('refresh')}Nochmal</button><button class="btn" style="flex:1;background:var(--good)" onclick="rate(true)">${I('check')}Gewusst</button></div>
@@ -1215,25 +1202,25 @@ async function loadLib(){if(!LIB)await ensureLib();
 function openLearn(ids,fromTab){if(ids)S.active=ids;S.recent=[...S.active.slice().reverse(),...S.recent.filter(x=>!S.active.includes(x))].slice(0,8);save();fromLesson='sel';if(fromTab)tab=fromTab;mode=null;
   const act=S.lessons.filter(l=>S.active.includes(l.id)),d=deck(),m=d.length?Math.round(d.reduce((s,w)=>s+(S.box[w.la]||0),0)/(d.length*5)*100):0,{due,nw}=dueInfo(),todo=due.length+Math.min(nw.length,10);
   const title=act.length===1?act[0].name:act.length+' Lektionen gemischt';
+  const dn=act.map(l=>S.done[l.name]).filter(Boolean),fin=act.length&&dn.length===act.length,hw=hardWords(d);
   view(`<div class="game-top"><button class="x" onclick="go(tab)">${I('back')}</button><b style="flex:1">${esc(title)}</b><button class="btn sm sec" onclick="renderMulti()">Ändern</button></div>
   ${act.length>1?`<div class="small" style="margin:-12px 2px 12px">${esc(act.map(l=>l.name).join(', '))}</div>`:''}
-  <div class="card"><div class="row between small"><span>${d.length} Vokabeln</span><span>${m} % gelernt</span></div><div class="bar good" style="margin:8px 0 14px"><div style="width:${m}%"></div></div>
-    <button class="btn full" onclick="startReview()" ${todo?'':'disabled'}>${todo?'Jetzt '+todo+' Karten lernen':'Alles wiederholt'}</button></div>
-  ${(()=>{const dn=act.map(l=>S.done[l.name]).filter(Boolean);return `<div class="card"><div class="row between"><b>Lektionsabschluss</b>${dn.length===act.length?`<span class="small" style="color:var(--good);font-weight:600">${I('check')} abgeschlossen</span>`:''}</div>
-    <div class="small" style="margin:6px 0 10px">${dn.length===act.length?'Beste Note: '+Math.min(...dn.map(x=>x.note))+'. Du kannst den Test jederzeit wiederholen.':'Schreib den Vokabeltest mit Note 3 oder besser, dann ist die Lektion auf deinem Lernpfad abgeschlossen.'}</div>
-    <button class="btn sm ${dn.length===act.length?'sec':''}" onclick="startTest()">Abschlusstest starten</button></div>`})()}
-  <div class="row between" style="margin:26px 2px 10px;flex-wrap:wrap;gap:8px"><div class="label" style="margin:0">Lernen</div>${dirSeg('openLearn()')}</div><div class="list">
-    ${item('cards','Karteikarten','umdrehen und selbst einschätzen','startCards()')}
+  <div class="card"><div class="row between small"><span>${d.length} Vokabeln</span><span>${m} % gelernt</span></div><div class="bar good" style="margin:8px 0 ${fin?6:14}px"><div style="width:${m}%"></div></div>${fin?`<div class="small" style="color:var(--good);font-weight:600;margin-bottom:12px">${I('check')} Lektion abgeschlossen, beste Note ${Math.min(...dn.map(x=>x.note))}</div>`:''}
+    <div style="margin-bottom:12px">${dirSeg('openLearn()')}</div>
+    <button class="btn full" onclick="startCards()">Alle ${d.length} Vokabeln lernen</button>
+    ${due.length?`<button class="btn sm sec full" style="margin-top:8px" onclick="startReview()">Nur fällige wiederholen (${due.length})</button>`:''}</div>
+  <div class="label">Üben</div><div class="list">
     ${item('check','Multiple Choice','aus vier Antworten wählen','startMC()')}
     ${item('pen','Tipp-Duell','die Bedeutung selbst schreiben','startType()')}
     ${item('list','Stammformen','Perfekt, PPP und Genitiv eintippen','startStamm()')}
-    ${(hw=>hw.length?item('flame','Schwierige Wörter',hw.length+' Wörter mit vielen Fehlern','startHard()'):'')(hardWords(d))}</div>
-  <div class="label">Testen</div><div class="list">
-    ${item('trophy','Vokabeltest','20 Fragen wie in der Schule, mit Note','startTest()')}
-    ${item('bolt','Blitz-Quiz','60 Sekunden gegen die Uhr','startQuiz()')}
-    ${item('sword','Arena','Kampf gegen Monster','startBoss()')}
-    ${item('columns','Grammatik','mit den Wörtern dieser Auswahl',"S.gramSrc='lesson';save();go('grammar')")}</div>
-  <div class="label">Alle Vokabeln</div><div class="small" style="margin:-4px 2px 10px">Rechts: wie oft richtig / falsch</div><div class="card" style="padding:4px 16px">${d.map(w=>{const v=S.vs[w.la];return `<div class="wrow"><span class="lat">${esc(w.la)}</span><span class="muted">${esc(w.de)}</span><span class="small" style="white-space:nowrap;margin-left:auto;padding-left:10px">${v?`<b style="color:var(--good)">${v.r}</b> / <b style="color:var(--bad)">${v.w}</b>`:'–'}</span></div>`}).join('')}</div>`,tab!=='lessons'||true)}
+    ${hw.length?item('flame','Schwierige Wörter',hw.length+' Wörter mit vielen Fehlern','startHard()'):''}
+    ${item('trophy','Vokabeltest',fin?'mit Note · schon bestanden, jederzeit wiederholbar':'mit Note · ab Note 3 ist die Lektion abgeschlossen','startTest()')}
+    ${item('bolt','Blitz-Quiz oder Arena','Spiele gegen die Uhr und gegen Monster',"renderGames()")}</div>
+  <div class="label">Alle Vokabeln (${d.length})</div><div class="small" style="margin:-4px 2px 10px">Rechts: wie oft richtig / falsch</div><div class="card" style="padding:4px 16px">${d.map(w=>{const v=S.vs[w.la];return `<div class="wrow"><span class="lat">${esc(w.la)}</span><span class="muted">${esc(w.de)}</span><span class="small" style="white-space:nowrap;margin-left:auto;padding-left:10px">${v?`<b style="color:var(--good)">${v.r}</b> / <b style="color:var(--bad)">${v.w}</b>`:'–'}</span></div>`}).join('')}</div>`)}
+function renderGames(){view(`<div class="game-top"><button class="x" onclick="openLearn()">${I('back')}</button><b style="flex:1">Spiele</b></div>
+  <div class="list">${item('bolt','Blitz-Quiz','<i>Fulmen Iovis</i> · 60 Sekunden, Rekord '+S.best,'startQuiz()')}
+    ${item('sword','Arena','<i>Pugna cum monstris</i> · Kampf gegen Monster','startBoss()')}
+    ${item('columns','Grammatik','mit den Wörtern dieser Auswahl',"S.gramSrc='lesson';save();go('grammar')")}</div>`,false)}
 function openLesson(id){if(!S.lessons.some(l=>l.id===id))return;openLearn([id],'lessons')}
 function addLib(bi,li){const b=LIB.books[bi],l=b.lessons[li],key=b.name+'|'+l.name,id='l'+Date.now();
   S.lessons.push({id,name:l.name,words:l.words.map(w=>({la:w[0],de:w[1]}))});S.added.push(key);S.active=[id];save();SFX.win();toast(l.name+' hinzugefügt','Wird jetzt geübt');checkAch();renderLessons()}
